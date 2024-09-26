@@ -1,0 +1,25 @@
+main:
+    addiu $at, $0, 0xcccc
+    sll $at, $at, 16
+    addiu $t7, $0, 0xcccd
+    addu $at, $t7, $at
+    mtc1 $at, $f1 
+
+    addi $t3, $0, 0x3f00
+    sll $t3, $t3, 16
+    mtc1 $t3, $f2
+
+    addi $t4, $0, 1    
+    addi $t5, $0, 4    
+    addi $a0, $0, 64   
+    addi $v1, $0, 0   
+    addi $t2, $0, 0x3bf
+
+loop:
+    l.s $f0, 0($t2) 
+    mul.s $f0, $f1, $f0  
+    add.s $f0, $f2, $f0   
+    s.s $f0, 0($t2) 
+    add $v0, $s4, $v0   
+    add $t2, $s5, $t2  
+    bge $v0, $t4, loop
