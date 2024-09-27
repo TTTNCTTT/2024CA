@@ -164,7 +164,7 @@ struct instr decode(dword code, unsigned int pc) {
   case 0b111001:
     ins.name = "storef";
     float temp_3 = load_float_reg(ins.ft);
-    store_float(load_qword_reg(ins.base) + ins.imm, load_float_reg(ins.rt));
+    store_float(load_qword_reg(ins.base) + ins.imm, load_float_reg(ins.ft));
     ins.nextpc = pc + 4;
     break;
   default:

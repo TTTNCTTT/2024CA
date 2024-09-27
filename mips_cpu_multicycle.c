@@ -5,6 +5,7 @@
 
 struct instr {
   char *name;
+  dword code;
   int opcode;
   int fmt;
   int base;
@@ -20,7 +21,18 @@ struct instr {
   // int uimm;
   int offset;
   unsigned int nextpc;
+  qword base_v;
+  qword rs_v;
+  qword rt_v;
+  qword rd_v;
+  qword fs_v;
+  qword ft_v;
+  qword fd_v;
 };
+
+dword cur_instr_code;
+
+struct instr cur_instr;
 
 void handle_decode_error(dword);
 
@@ -34,13 +46,9 @@ unsigned int get_high_bits(qword num, int high_bits) {
   return (num & mask) >> (sizeof(unsigned int) * 8 - high_bits);
 }
 
-struct instr decode(dword code, unsigned int pc) {
+struct instr decode(dword code) {
   struct instr ins;
-  if (code == 0x0) {
-    ins.name = "hlt";
-    ins.nextpc = 0;
-    return ins;
-  }
+  ins.code = code;
   ins.opcode = (code >> 26) & 0x3f;
   ins.fmt = (code >> 21) & 0x1f;
   ins.base = (code >> 21) & 0x1f;
@@ -53,7 +61,141 @@ struct instr decode(dword code, unsigned int pc) {
   ins.shamt = (code >> 6) & 0x1f;
   ins.func = code & 0x3f;
   ins.imm = code & 0xffff;
+  if (ins.code == 0x0) {
+    ins.name = "hlt";
+    ins.nextpc = 0;
+    return ins;
+  }
+  switch (ins.opcode) {
+  case 0:
+    switch (ins.func) {
+    case 0b000000:
+      ins.name = "sll";
+      dword temp_sll_rt = load_dword_reg(ins.rt);
+      ins.rt_v = *(qword *)&temp_sll_rt;
+      break;
+    case 0b100000:
+      ins.name = "add";
+      dword temp_add_rs = load_dword_reg(ins.rs);
+      dword temp_add_rt = load_dword_reg(ins.rt);
+      ins.rs_v = *(qword *)&temp_add_rs;
+      ins.rt_v = *(qword *)&temp_add_rt;
+      break;
+    case 0b100001:
+      ins.name = "addu";
+      uqword temp_addu_rs = load_udword_reg(ins.rs);
+      uqword temp_addu_rt = load_udword_reg(ins.rt);
+      ins.rs_v = *(qword *)&temp_addu_rs;
+      ins.rt_v = *(qword *)&temp_addu_rt;
+      break;
+    default:
+      handle_decode_error(ins.code);
+    }
+    break;
+  case 0b001000:
+    ins.name = "addi";
+    dword temp_addi_rs = load_dword_reg(ins.rs);
+    ins.rs_v = *(qword *)&temp_addi_rs;
+    break;
+  case 0b001001:
+    ins.name = "addiu";
+    udword temp_addiu_rs = load_udword_reg(ins.rs);
+    ins.rs_v = *(qword *)&temp_addiu_rs;
+    break;
+  case 0b010110:
+    ins.name = "bge";
+    qword temp_bge_rs = load_qword_reg(ins.rs);
+    qword temp_bge_rt = load_qword_reg(ins.rt);
+    ins.rs_v = *(qword *)&temp_bge_rs;
+    ins.rt_v = *(qword *)&temp_bge_rt;
+    break;
+  case 0b010001:
+    switch (ins.fmt) {
+    case 0b10000:
+      switch (ins.func) {
+      case 0b000000:
+        ins.name = "addf";
+        float temp_addf_fs = load_float_reg(ins.fs);
+        float temp_addf_ft = load_float_reg(ins.ft);
+        ins.rs_v = *(qword *)&temp_addf_fs;
+        ins.rt_v = *(qword *)&temp_addf_ft;
+        break;
+      case 0b000010:
+        ins.name = "mulf";
+        float temp_addf_fs = load_float_reg(ins.fs);
+        float temp_addf_ft = load_float_reg(ins.ft);
+        ins.rs_v = *(qword *)&temp_addf_fs;
+        ins.rt_v = *(qword *)&temp_addf_ft;
+        break;
+      default:
+        handle_decode_error(ins.code);
+      }
+      break;
+    case 0b10001:
+      switch (ins.func) {
+      case 0x06:
+        ins.name = "mov.d";
+        double temp_mov_d_fs = load_double_reg(ins.fs);
+        ins.fs_v = *(qword *)&temp_mov_d_fs;
+        break;
+      default:
+        handle_decode_error(ins.code);
+        system_break();
+      }
+      break;
+    case 0b00100: {
+      ins.name = "mtc1";
+      dword temp_mtc1_rt = load_dword_reg(ins.rt);
+      ins.rt_v = *(qword *)&temp_mtc1_rt;
+      break;
+    }
+    case 0b00000: {
+      ins.name = "mfc1";
+      float temp_mfc1_fs = load_float_reg(ins.fs);
+      ins.fs_v = *(qword *)&temp_mfc1_fs;
+      break;
+    }
+    case 0b00101: {
+      ins.name = "dmtc1";
+      qword temp_dmtc1_rt = load_qword_reg(ins.rt);
+      ins.rt_v = *(qword *)&temp_dmtc1_rt;
+      break;
+    }
+    case 0b00001: {
+      ins.name = "dmfc1";
+      double temp_dmfc1_fs = load_double_reg(ins.fs);
+      ins.fs_v = *(qword *)&temp_dmfc1_fs;
+      break;
+    }
+    default:
+      handle_decode_error(ins.code);
+      break;
+    }
+    break;
+  case 0b110001:
+    ins.name = "loadf";
+    qword temp_loadf_base = load_qword_reg(ins.base);
+    ins.base_v = *(qword *)&temp_loadf_base;
+    break;
+  case 0b111001:
+    ins.name = "storef";
+    float temp_storef_fs = load_float_reg(ins.ft);
+    ins.ft_v = *(qword *)&temp_storef_fs;
+    qword temp_storef_base = load_qword_reg(ins.base);
+    ins.base_v = *(qword *)&temp_storef_base;
+    break;
+  default:
+    handle_decode_error(ins.code);
+  }
+  return ins;
+}
 
+void execute_instruction(struct instr ins, unsigned int pc) {
+  if (ins.code == 0x0) {
+    ins.name = "hlt";
+    ins.nextpc = 0;
+    return ins;
+  }
   switch (ins.opcode) {
   case 0:
     switch (ins.func) {
@@ -71,7 +213,7 @@ struct instr decode(dword code, unsigned int pc) {
       store_dword_reg(ins.rd, load_dword_reg(ins.rs) + load_dword_reg(ins.rt));
       break;
     default:
-      handle_decode_error(code);
+      handle_decode_error(ins.code);
     }
     ins.nextpc = pc + 4;
     break;
@@ -111,7 +253,7 @@ struct instr decode(dword code, unsigned int pc) {
                         load_float_reg(ins.fs) * load_float_reg(ins.ft));
         break;
       default:
-        handle_decode_error(code);
+        handle_decode_error(ins.code);
       }
       break;
     case 0b10001:
@@ -121,7 +263,7 @@ struct instr decode(dword code, unsigned int pc) {
         store_double_reg(ins.rd, load_double_reg(ins.rs));
         break;
       default:
-        handle_decode_error(code);
+        handle_decode_error(ins.code);
         system_break();
       }
       break;
@@ -150,7 +292,7 @@ struct instr decode(dword code, unsigned int pc) {
       break;
     }
     default:
-      handle_decode_error(code);
+      handle_decode_error(ins.code);
       break;
     }
     ins.nextpc = pc + 4;
@@ -168,7 +310,7 @@ struct instr decode(dword code, unsigned int pc) {
     ins.nextpc = pc + 4;
     break;
   default:
-    handle_decode_error(code);
+    handle_decode_error(ins.code);
   }
   return ins;
 }
@@ -221,7 +363,7 @@ void execute_instructions() {
     dword code = fetch_instruction(pc);
     if (code == 0)
       break;
-    struct instr ins = decode(code, pc);
+    struct instr ins = decode(code);
     // printf("Executed: %s\n", ins.name);
     pc = ins.nextpc;
   }
@@ -250,4 +392,52 @@ int main() {
       printf("\n");
   }
   return 0;
+}
+
+typedef enum { IF, ID, EX, MEM, WB } State;
+State current_state = IF;
+
+void decode_instruction() {
+  // 译码逻辑
+}
+
+void execute_instruction() {
+  // 执行逻辑
+}
+
+void memory_access() {
+  // 访存逻辑
+}
+
+void write_back() {
+  // 写回逻辑
+}
+
+void execute_instructions() {
+  unsigned int pc = 0;
+  while (pc < MAXINST) {
+    switch (current_state) {
+    case IF:
+      cur_instr_code = fetch_instruction(pc);
+      current_state = ID;
+      break;
+    case ID:
+      decode_instruction();
+      current_state = EX;
+      break;
+    case EX:
+      execute_instruction();
+      current_state = MEM;
+      break;
+    case MEM:
+      memory_access();
+      current_state = WB;
+      break;
+    case WB:
+      write_back();
+      current_state = IF;
+      pc = next_pc;
+      break;
+    }
+  }
 }
