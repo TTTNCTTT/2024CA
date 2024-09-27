@@ -69,8 +69,7 @@ struct instr decode(dword code, unsigned int pc) {
       store_dword_reg(ins.rd, load_dword_reg(ins.rs) + load_dword_reg(ins.rt));
       break;
     default:
-      printf("decode error with code: %#x\n", code);
-      system_break();
+      handle_decode_error(code);
     }
     ins.nextpc = pc + 4;
     break;
@@ -110,8 +109,7 @@ struct instr decode(dword code, unsigned int pc) {
                         load_float_reg(ins.fs) * load_float_reg(ins.ft));
         break;
       default:
-        printf("decode error with code: %#x\n", code);
-        system_break();
+        handle_decode_error(code);
       }
       break;
     case 0b10001:
@@ -121,7 +119,7 @@ struct instr decode(dword code, unsigned int pc) {
         store_double_reg(ins.rd, load_double_reg(ins.rs));
         break;
       default:
-        printf("decode error with code: %#x\n", code);
+        handle_decode_error(code);
         system_break();
       }
       break;
@@ -150,8 +148,7 @@ struct instr decode(dword code, unsigned int pc) {
       break;
     }
     default:
-      printf("decode error with code: %#x\n", code);
-      system_break();
+      handle_decode_error(code);
       break;
     }
     ins.nextpc = pc + 4;
@@ -169,10 +166,14 @@ struct instr decode(dword code, unsigned int pc) {
     ins.nextpc = pc + 4;
     break;
   default:
-    printf("decode error with code: %#x\n", code);
-    exit(-1);
+    handle_decode_error(code);
   }
   return ins;
+}
+
+void handle_decode_error(dword code) {
+  printf("decode error with code: %#x\n", code);
+  system_break();
 }
 
 void load_instructions(const char *filename) {
