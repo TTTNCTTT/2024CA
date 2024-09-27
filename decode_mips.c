@@ -22,6 +22,8 @@ struct instr {
   unsigned int nextpc;
 };
 
+void handle_decode_error(dword);
+
 // 截取指定高位
 unsigned int get_high_bits(qword num, int high_bits) {
   // 计算掩码
@@ -226,7 +228,7 @@ void execute_instructions() {
 }
 
 int main() {
-  printf("存入的数据\n");
+  printf("存入的待计算数据\n");
   for (int i = 0; i < 64; i++) {
     store_float(i * 4, 0.1 * (i + 1) + 4);
     printf("f[%d]:%.2f\t", i, load_float(i * 4));
@@ -241,7 +243,7 @@ int main() {
     if (!((i + 1) % 4))
       printf("\n");
   }
-  printf("\n读取的数据\n");
+  printf("\n读取的结果数据\n");
   for (int i = 0; i < 64; i++) {
     printf("f[%d]:%.2f\t", i, load_float(i * 4));
     if (!((i + 1) % 4))
