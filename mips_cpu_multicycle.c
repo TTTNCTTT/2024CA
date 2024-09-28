@@ -190,11 +190,67 @@ struct instr decode(dword code) {
   return ins;
 }
 
-void execute_instruction(struct instr ins, unsigned int pc) {
-  if (ins.code == 0x0) {
-    ins.name = "hlt";
-    ins.nextpc = 0;
+void execute(struct instr ins, unsigned int pc) {
+  if (strcmp(ins.name, "sll") == 0) {
+    dword temp_sll_rd = *(dword *)&ins.rt_v << ins.shamt;
+    ins.rd_v = *(qword *)&temp_sll_rd;
+  } else if (strcmp(ins.name, "add") == 0) {
+    dword temp_add_rd = *(dword *)&ins.rs_v + *(dword *)&ins.rt_v;
+    ins.rd_v = *(qword *)&temp_add_rd;
+  } else if (strcmp(ins.name, "addu") == 0) {
+    uqword temp_addu_rd = *(uqword *)&ins.rs_v + *(uqword *)&ins.rt_v;
+    ins.rd_v = *(qword *)&temp_addu_rd;
+  } else if (strcmp(ins.name, "addi") == 0) {
+    dword temp_addi_rt = *(dword *)&ins.rs_v + ins.imm;
+    ins.rt_v = *(qword *)&temp_addi_rt;
+  } else if (strcmp(ins.name, "addiu") == 0) {
+    uqword temp_addiu_rt = *(uqword *)&ins.rs_v + ((uqword)ins.imm & 0xffff);
+    ins.rt_v = *(qword *)&temp_addiu_rt;
+  } else if (strcmp(ins.name, "addf") == 0) {
+    float temp_addf_fd = *(float *)&ins.fs_v + *(float *)&ins.ft_v;
+    ins.fd_v = *(qword *)&temp_addf_fd;
+  } else if (strcmp(ins.name, "mulf") == 0) {
+    float temp_mulf_fd = *(float *)&ins.fs_v * *(float *)&ins.ft_v;
+    ins.fd_v = *(qword *)&temp_mulf_fd;
+  } else if (strcmp(ins.name, "mov.d") == 0) {
+    double temp_movd_fd = *(double *)&ins.rs_v;
+    ins.fd_v = *(qword *)&temp_movd_fd;
+  } else if (strcmp(ins.name, "mtc1") == 0) {
+    float temp_mtc1_fs = *(float *)&ins.rt_v;
+    ins.fs_v = *(qword *)&temp_mtc1_fs;
+  } else if (strcmp(ins.name, "mfc1") == 0) {
+    dword temp_mfc1_rt = *(dword *)&ins.fs_v;
+    ins.rt_v = *(qword *)&temp_mfc1_rt;
+  } else if (strcmp(ins.name, "dmtc1") == 0) {
+    float temp_dmtc1_fs = *(float *)&ins.rt_v;
+    ins.fs_v = *(qword *)&temp_dmtc1_fs;
+  } else if (strcmp(ins.name, "dmfc1") == 0) {
+    double temp_dmfc1_rt = *(double *)&ins.fs_v;
+    ins.rt_v = *(qword *)&temp_dmfc1_rt;
+  } else if (strcmp(ins.name, "loadf") == 0) {
+    float temp_loadf_rt = load_float(*(qword *)&ins.base_v + ins.imm);
+    ins.rt_v = *(qword *)&temp_loadf_rt;
+  } else if (strcmp(ins.name, "storef") == 0) {
+    float temp_storef_ft = *(float *)&ins.ft_v;
+    store_float(*(qword *)&ins.base_v + ins.imm, temp_storef_ft);
+  } else if (strcmp(ins.name, "bge") == 0) {
+    if (*(qword *)&ins.rs_v >= *(qword *)&ins.rt_v) {
+      ins.nextpc = pc + (ins.imm << 2);
+    } else {
+      ins.nextpc = pc + 4;
+    }
     return ins;
+  } else {
+    handle_excute_error(ins.code);
+  }
+  ins.nextpc = pc + 4;
+  return ins;
+}
+
+void mem_back(struct instr ins, unsigned int pc) {
+  if (ins.name == "sll") {
+    dword temp_sll_rd = ins.rt_v << ins.shamt;
+    store_dword_reg(ins.rd, load_dword_reg(ins.rt) << ins.shamt);
   }
   switch (ins.opcode) {
   case 0:
@@ -320,6 +376,11 @@ void handle_decode_error(dword code) {
   system_break();
 }
 
+void handle_excute_error(dword code) {
+  printf("decode error with code: %#x\n", code);
+  system_break();
+}
+
 void load_instructions(const char *filename) {
   FILE *file = fopen(filename, "r");
   if (!file) {
@@ -397,14 +458,6 @@ int main() {
 typedef enum { IF, ID, EX, MEM, WB } State;
 State current_state = IF;
 
-void decode_instruction() {
-  // 译码逻辑
-}
-
-void execute_instruction() {
-  // 执行逻辑
-}
-
 void memory_access() {
   // 访存逻辑
 }
@@ -422,11 +475,11 @@ void execute_instructions() {
       current_state = ID;
       break;
     case ID:
-      decode_instruction();
+      cur_instr = decode(cur_instr_code);
       current_state = EX;
       break;
     case EX:
-      execute_instruction();
+      execute_instruction(cur_instr, pc);
       current_state = MEM;
       break;
     case MEM:
