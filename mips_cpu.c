@@ -1,4 +1,4 @@
-#include "./regfile.c"
+#include "./regfile.c" // 定义了寄存器、主存接口
 
 // extern char* mem;
 // extern qword regf;

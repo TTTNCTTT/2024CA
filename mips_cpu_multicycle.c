@@ -1,4 +1,4 @@
-#include "./regfile.c"
+#include "./regfile.c" // 定义了寄存器、主存接口
 #include <string.h>
 
 // 定义CPU的状态枚举
