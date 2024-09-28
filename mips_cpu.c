@@ -118,7 +118,7 @@ struct instr decode(dword code, unsigned int pc) {
       switch (ins.func) {
       case 0x06:
         ins.name = "mov.d";
-        store_double_reg(ins.rd, load_double_reg(ins.rs));
+        store_double_reg(ins.fd, load_double_reg(ins.fs));
         break;
       default:
         handle_decode_error(code);
@@ -139,7 +139,7 @@ struct instr decode(dword code, unsigned int pc) {
     }
     case 0b00101: {
       ins.name = "dmtc1";
-      dword temp = load_qword_reg(ins.rt);
+      qword temp = load_qword_reg(ins.rt);
       store_float_reg(ins.fs, *(float *)&temp);
       break;
     }
@@ -158,7 +158,7 @@ struct instr decode(dword code, unsigned int pc) {
   case 0b110001:
     ins.name = "loadf";
     float temp_5 = load_float(load_qword_reg(ins.base) + ins.imm);
-    store_float_reg(ins.rt, load_float(load_qword_reg(ins.base) + ins.imm));
+    store_float_reg(ins.ft, load_float(load_qword_reg(ins.base) + ins.imm));
     ins.nextpc = pc + 4;
     break;
   case 0b111001:
