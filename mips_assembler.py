@@ -689,23 +689,23 @@ def get_J_Type_machine_code(ins_couple):
     return res_code
 
 
-# parser = argparse.ArgumentParser(
-#     description="MIPS Assembler",
-#     usage="python mips_assembler.py [-h] [-p] <input_file> <output_file>"
-# )
-# parser.add_argument("input_file", help="Path to the input file")
-# parser.add_argument("output_file", help="Path to the output file")
-# parser.add_argument("-p", "--print", action="store_true", help="Print the output")
+parser = argparse.ArgumentParser(
+    description="MIPS Assembler",
+    usage="python mips_assembler.py [-h] [-p] <input_file> <output_file>"
+)
+parser.add_argument("input_file", help="Path to the assemble code")
+parser.add_argument("output_file", help="Path to the binary code")
+parser.add_argument("-p", "--print", action="store_true", help="Print the output")
 
-# args = parser.parse_args()
+args = parser.parse_args()
 
-# path = args.input_file
-# output_file = args.output_file
-# if_print = args.print
+path = args.input_file
+output_file = args.output_file
+if_print = args.print
 
-path = "/home/ladev789/CPP/CA/mips_asm_input.txt"
-output_file = "/home/ladev789/CPP/CA/bincode.COE"
-if_print = True
+# path = "/home/ladev789/CPP/CA/mips_asm_input.txt"
+# output_file = "/home/ladev789/CPP/CA/bincode.COE"
+# if_print = True
 
 
 with open(path, 'r',encoding = 'UTF-8') as file:

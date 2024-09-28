@@ -22,19 +22,9 @@ struct instr {
   unsigned int nextpc;
 };
 
-void handle_decode_error(dword);
+void handle_error(dword);
 
-// 截取指定高位
-unsigned int get_high_bits(qword num, int high_bits) {
-  // 计算掩码
-  unsigned int mask = (1 << high_bits) - 1;
-  // 将掩码左移到高位
-  mask <<= (sizeof(unsigned int) * 8 - high_bits);
-  // 使用掩码提取高位
-  return (num & mask) >> (sizeof(unsigned int) * 8 - high_bits);
-}
-
-struct instr decode(dword code, unsigned int pc) {
+struct instr decode_and_excute(dword code, unsigned int pc) {
   struct instr ins;
   if (code == 0x0) {
     ins.name = "hlt";
@@ -71,7 +61,7 @@ struct instr decode(dword code, unsigned int pc) {
       store_dword_reg(ins.rd, load_dword_reg(ins.rs) + load_dword_reg(ins.rt));
       break;
     default:
-      handle_decode_error(code);
+      handle_error(code);
     }
     ins.nextpc = pc + 4;
     break;
@@ -111,7 +101,7 @@ struct instr decode(dword code, unsigned int pc) {
                         load_float_reg(ins.fs) * load_float_reg(ins.ft));
         break;
       default:
-        handle_decode_error(code);
+        handle_error(code);
       }
       break;
     case 0b10001:
@@ -121,7 +111,7 @@ struct instr decode(dword code, unsigned int pc) {
         store_double_reg(ins.fd, load_double_reg(ins.fs));
         break;
       default:
-        handle_decode_error(code);
+        handle_error(code);
         system_break();
       }
       break;
@@ -150,7 +140,7 @@ struct instr decode(dword code, unsigned int pc) {
       break;
     }
     default:
-      handle_decode_error(code);
+      handle_error(code);
       break;
     }
     ins.nextpc = pc + 4;
@@ -168,13 +158,13 @@ struct instr decode(dword code, unsigned int pc) {
     ins.nextpc = pc + 4;
     break;
   default:
-    handle_decode_error(code);
+    handle_error(code);
   }
   return ins;
 }
 
-void handle_decode_error(dword code) {
-  printf("decode error with code: %#x\n", code);
+void handle_error(dword code) {
+  printf("decode error with code: %#x unknown instruction\n", code);
   system_break();
 }
 
@@ -221,13 +211,24 @@ void execute_instructions() {
     dword code = fetch_instruction(pc);
     if (code == 0)
       break;
-    struct instr ins = decode(code, pc);
+    struct instr ins = decode_and_excute(code, pc);
     // printf("Executed: %s\n", ins.name);
     pc = ins.nextpc;
   }
 }
 
-int main() {
+void print_usage(const char *program_name) {
+  printf("Usage: %s <instruction_file>\n", program_name);
+}
+
+int main(int argc, char *argv[]) {
+  if (argc != 2) {
+    print_usage(argv[0]);
+    return 1;
+  }
+
+  const char *instruction_file = argv[1];
+
   printf("存入的待计算数据\n");
   for (int i = 0; i < 64; i++) {
     store_float(i * 4, 0.1 * (i + 1) + 4);
@@ -235,8 +236,8 @@ int main() {
     if (!((i + 1) % 4))
       printf("\n");
   }
-  printf("\n标准数据\n");
-  load_instructions("./bincode.COE");
+  printf("\n使用c直接计算出的标准答案\n");
+  load_instructions(instruction_file);
   execute_instructions();
   for (int i = 0; i < 64; i++) {
     printf("f[%d]:%.2f\t", i, (0.1 * (i + 1) + 4) * 0.9 + 0.5);

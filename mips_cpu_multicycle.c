@@ -1,51 +1,33 @@
 #include "./regfile.c"
 #include <string.h>
 
+// 定义CPU的状态枚举
 typedef enum { IF, ID, EX, MEM, WB } State;
+
+// 定义指令结构体
 struct instr {
-  char *name;
-  dword code;
-  int opcode;
-  int fmt;
-  int base;
-  int rs;
-  int rt;
-  int rd;
-  int fs;
-  int ft;
-  int fd;
-  int shamt;
-  int func;
-  word imm;
+  char *name; // 指令名称
+  dword code; // 指令代码
+  int opcode; // 操作码
+  int fmt;    // 指令格式
+  int base, rs, rt, rd, fs, ft, fd, shamt, func;
+  word imm; // 立即数
   // int uimm;
-  int offset;
-  unsigned int nextpc;
-  qword base_v;
-  qword rs_v;
-  qword rt_v;
-  qword rd_v;
-  qword fs_v;
-  qword ft_v;
-  qword fd_v;
+  int offset;          // 偏移量
+  unsigned int nextpc; // 下一条指令的PC地址
+  qword base_v, rs_v, rt_v, rd_v, fs_v, ft_v, fd_v; // 操作数的值
 };
 
+// 全局变量
 dword cur_instr_code;
 struct instr cur_instr;
 State current_state = IF;
 
+// 错误处理函数声明
 void handle_decode_error(dword);
 void handle_excute_error(dword);
 
-// 截取指定高位
-unsigned int get_high_bits(qword num, int high_bits) {
-  // 计算掩码
-  unsigned int mask = (1 << high_bits) - 1;
-  // 将掩码左移到高位
-  mask <<= (sizeof(unsigned int) * 8 - high_bits);
-  // 使用掩码提取高位
-  return (num & mask) >> (sizeof(unsigned int) * 8 - high_bits);
-}
-
+// 解码指令的函数
 struct instr decode(dword code) {
   struct instr ins;
   ins.code = code;
@@ -190,6 +172,7 @@ struct instr decode(dword code) {
   return ins;
 }
 
+// 执行指令的函数
 struct instr execute(struct instr ins, unsigned int pc) {
   if (strcmp(ins.name, "sll") == 0) {
     dword temp_sll_rd = *(dword *)&ins.rt_v << ins.shamt;
@@ -247,6 +230,7 @@ struct instr execute(struct instr ins, unsigned int pc) {
   return ins;
 }
 
+// 处理内存访问的函数
 struct instr memory(struct instr ins) {
   if (strcmp(ins.name, "loadf") == 0) {
     float temp_loadf_ft = load_float(ins.rt_v);
@@ -258,6 +242,7 @@ struct instr memory(struct instr ins) {
   return ins;
 }
 
+// 写回结果到寄存器的函数
 void writeback(struct instr ins) {
   if (strcmp(ins.name, "sll") == 0) {
     dword temp_sll_rd = *(dword *)&ins.rd_v;
@@ -300,6 +285,7 @@ void writeback(struct instr ins) {
   }
 }
 
+// 错误处理函数实现
 void handle_decode_error(dword code) {
   printf("decode error with code: %#x\n", code);
   system_break();
@@ -310,6 +296,7 @@ void handle_excute_error(dword code) {
   system_break();
 }
 
+// 从文件中加载指令到缓存
 void load_instructions(const char *filename) {
   FILE *file = fopen(filename, "r");
   if (!file) {
@@ -333,7 +320,7 @@ void load_instructions(const char *filename) {
   fclose(file);
 }
 
-// 取指
+// 从指令缓存中取指
 dword fetch(unsigned int pc) {
   // 从缓存中读取四个字节并组合成一个dword
   dword code = 0;
@@ -344,8 +331,10 @@ dword fetch(unsigned int pc) {
   return code;
 }
 
+// 执行指令的主循环
 void execute_instructions() {
   unsigned int pc = 0;
+  // 多周期CPU的主循环，按照IF-ID-EX-MEM-WB顺序执行
   while (pc < MAXINST) {
     switch (current_state) {
     case IF:
@@ -377,7 +366,18 @@ void execute_instructions() {
 halt:;
 }
 
-int main() {
+void print_usage(const char *program_name) {
+  printf("Usage: %s <instruction_file>\n", program_name);
+}
+
+int main(int argc, char *argv[]) {
+  if (argc != 2) {
+    print_usage(argv[0]);
+    return 1;
+  }
+
+  const char *instruction_file = argv[1];
+
   printf("存入的待计算数据\n");
   for (int i = 0; i < 64; i++) {
     store_float(i * 4, 0.1 * (i + 1) + 4);
@@ -385,9 +385,9 @@ int main() {
     if (!((i + 1) % 4))
       printf("\n");
   }
-  load_instructions("./bincode.COE");
-  execute_instructions();
   printf("\n使用c直接计算出的标准答案\n");
+  load_instructions(instruction_file);
+  execute_instructions();
   for (int i = 0; i < 64; i++) {
     printf("f[%d]:%.2f\t", i, (0.1 * (i + 1) + 4) * 0.9 + 0.5);
     if (!((i + 1) % 4))

@@ -11,7 +11,6 @@ main:
     sll $r11, $r11, 16
     mtc1 $r11, $f2     // 0.5 in $f2
 
-
     addi $r12, $r0, 1     // 1 into $r12
     addi $r13, $r0, 4     // 4 into $r13
     addi $rbx, $r0, 64    // n=64, n into $rbx
