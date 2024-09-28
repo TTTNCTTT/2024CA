@@ -117,15 +117,15 @@ struct instr decode(dword code) {
         ins.name = "addf";
         float temp_addf_fs = load_float_reg(ins.fs);
         float temp_addf_ft = load_float_reg(ins.ft);
-        ins.rs_v = *(qword *)&temp_addf_fs;
-        ins.rt_v = *(qword *)&temp_addf_ft;
+        ins.fs_v = *(qword *)&temp_addf_fs;
+        ins.ft_v = *(qword *)&temp_addf_ft;
         break;
       case 0b000010:
         ins.name = "mulf";
         float temp_mulf_fs = load_float_reg(ins.fs);
         float temp_mulf_ft = load_float_reg(ins.ft);
-        ins.rs_v = *(qword *)&temp_addf_fs;
-        ins.rt_v = *(qword *)&temp_addf_ft;
+        ins.fs_v = *(qword *)&temp_mulf_fs;
+        ins.ft_v = *(qword *)&temp_mulf_ft;
         break;
       default:
         handle_decode_error(ins.code);
@@ -247,14 +247,15 @@ struct instr execute(struct instr ins, unsigned int pc) {
   return ins;
 }
 
-void memory(struct instr ins) {
+struct instr memory(struct instr ins) {
   if (strcmp(ins.name, "loadf") == 0) {
     float temp_loadf_ft = load_float(ins.rt_v);
     ins.ft_v = *(qword *)&temp_loadf_ft;
   } else if (strcmp(ins.name, "storef") == 0) {
     float temp_storef_ft = *(float *)&ins.ft_v;
-    store_float(ins.rt, temp_storef_ft);
+    store_float(ins.rt_v, temp_storef_ft);
   }
+  return ins;
 }
 
 void writeback(struct instr ins) {
@@ -362,14 +363,14 @@ void execute_instructions() {
       current_state = MEM;
       break;
     case MEM:
-      memory(cur_instr);
+      cur_instr = memory(cur_instr);
       current_state = WB;
       break;
     case WB:
       writeback(cur_instr);
       current_state = IF;
       pc = cur_instr.nextpc;
-      printf("Executed: %s\n", cur_instr.name);
+      // printf("Executed: %s\n", cur_instr.name);
       break;
     }
   }
@@ -386,7 +387,7 @@ int main() {
   }
   load_instructions("./bincode.COE");
   execute_instructions();
-  printf("\n标准数据\n");
+  printf("\n使用c直接计算出的标准答案\n");
   for (int i = 0; i < 64; i++) {
     printf("f[%d]:%.2f\t", i, (0.1 * (i + 1) + 4) * 0.9 + 0.5);
     if (!((i + 1) % 4))
