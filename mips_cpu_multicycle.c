@@ -22,6 +22,8 @@ struct instr {
 dword cur_instr_code;
 struct instr cur_instr;
 State current_state = IF;
+int cycle_count;
+int ins_count;
 
 // 错误处理函数声明
 void handle_decode_error(dword);
@@ -322,6 +324,7 @@ void load_instructions(const char *filename) {
 
 // 从指令缓存中取指
 dword fetch(unsigned int pc) {
+  ins_count++;
   // 从缓存中读取四个字节并组合成一个dword
   dword code = 0;
   code |= inst_cache[pc] << 24;
@@ -336,6 +339,7 @@ void execute_instructions() {
   unsigned int pc = 0;
   // 多周期CPU的主循环，按照IF-ID-EX-MEM-WB顺序执行
   while (pc < MAXINST) {
+    cycle_count++;
     switch (current_state) {
     case IF:
       cur_instr_code = fetch(pc);
@@ -367,7 +371,7 @@ halt:;
 }
 
 void print_usage(const char *program_name) {
-  printf("Usage: %s <instruction_file>\n", program_name);
+  printf("MIPS64 CPU Simulator\nUsage: %s <instruction_file>\n", program_name);
 }
 
 int main(int argc, char *argv[]) {
@@ -399,5 +403,8 @@ int main(int argc, char *argv[]) {
     if (!((i + 1) % 4))
       printf("\n");
   }
+  printf("\nInstruction count:%d\n", ins_count);
+  printf("\nCycle count:%d\n", cycle_count);
+  printf("\nCPI:%.4f\n", ((double)cycle_count / (double)ins_count));
   return 0;
 }
