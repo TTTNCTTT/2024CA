@@ -363,7 +363,7 @@ void execute_instructions() {
       writeback(cur_instr);
       current_state = IF;
       pc = cur_instr.nextpc;
-      // printf("Executed: %s\n", cur_instr.name);
+      printf("Executed: %s\n", cur_instr.name);
       break;
     }
   }
@@ -389,9 +389,11 @@ int main(int argc, char *argv[]) {
     if (!((i + 1) % 4))
       printf("\n");
   }
-  printf("\n使用c直接计算出的标准答案\n");
+
   load_instructions(instruction_file);
   execute_instructions();
+
+  printf("\n使用c直接计算出的标准答案\n");
   for (int i = 0; i < 64; i++) {
     printf("f[%d]:%.2f\t", i, (0.1 * (i + 1) + 4) * 0.9 + 0.5);
     if (!((i + 1) % 4))
