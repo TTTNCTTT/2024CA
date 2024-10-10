@@ -392,6 +392,7 @@ int main(int argc, char *argv[]) {
 
   load_instructions(instruction_file);
   execute_instructions();
+
   printf("\n使用c直接计算出的标准答案\n");
   for (int i = 0; i < 64; i++) {
     printf("f[%d]:%.2f\t", i, (0.1 * (i + 1) + 4) * 0.9 + 0.5);
