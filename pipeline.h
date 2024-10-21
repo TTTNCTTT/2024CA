@@ -30,6 +30,7 @@ struct INST {
   char opcode;
   char RS1, RS2, Rd;
   int Imm;
+  bool Flush;
   bool Hlt;
 };
 
@@ -48,21 +49,22 @@ int ins_count;
 struct INST INSTLIST[MAXINST];
 struct INST nop = {0, 0, 0, 0, 0, false};
 struct STAGE StageF, StageD, StageE, StageM, StageW;
-char alu[] = "ALU";
-char branch[] = "BRCH";
-char jmp[] = "JMP";
-char load[] = "LOAD";
-char store[] = "STOR";
-char fpu[] = "FPU";
-char nope[] = "None";
-char error[] = "ERR";
+char alu[] = "alu";
+char branch[] = "brch";
+char jmp[] = "jmp";
+char load[] = "load";
+char store[] = "stor";
+char fpu[] = "fpu";
+char nope[] = "NONE";
+char error[] = "err";
 // 错误处理函数声明
 void handle_decode_error(dword);
 void handle_excute_error(dword);
 
 struct INST instr_to_INST(struct instr);
-char *itype(int opcode) {
-  switch (opcode) {
+
+char *itype(struct INST ins) {
+  switch (ins.opcode) {
   case ALU:
     return alu;
   case BRANCH:
@@ -78,9 +80,8 @@ char *itype(int opcode) {
   case 0:
     return nope;
   default:
-    break;
+    return error;
   }
-  return "ERROR";
 }
 
 // 解码指令的函数
@@ -505,9 +506,9 @@ void pipeline_excute() {
   int FPU_busy = 0;
   int stall_cnt = 0;
   while (!inst_list[ins_ptr].Hlt) {
-    printf("|F:%s\t|D:%s\t|E:%s\t|M:%s\t|W:%s\t|\n", itype(StageF.inst.opcode),
-           itype(StageD.inst.opcode), itype(StageE.inst.opcode),
-           itype(StageM.inst.opcode), itype(StageW.inst.opcode));
+    printf("|F:%s\t|D:%s\t|E:%s\t|M:%s\t|W:%s\t|\n", itype(StageF.inst),
+           itype(StageD.inst), itype(StageE.inst), itype(StageM.inst),
+           itype(StageW.inst));
 
     // 下面的逻辑决定：上个周期内执行完毕的指令结果是否能够进入下一周期，继续开始它们的下一阶段执行
 
@@ -517,16 +518,16 @@ void pipeline_excute() {
     //
     if (!(!StageW.valid)) {
       StageW = StageM;
+      StageM.valid = true;
     } else {
-      StageW.valid = false;
+      StageM.valid = false;
     }
     //
     if (!(!StageM.valid || DM_busy)) {
       StageM = StageE;
+      StageE.valid = true;
     } else {
-      if ((StageM.valid))
-        StageM.inst.opcode = 0;
-      StageM.valid = false;
+      StageE.valid = false;
     }
 
     // ID是否传递给EX
@@ -535,20 +536,12 @@ void pipeline_excute() {
            (StageD.inst.RS1 == StageE.inst.Rd ||
             StageD.inst.RS2 == StageE.inst.Rd)))) {
       StageE = StageD;
-      StageE.valid = true;
+      StageD.valid = true;
     } else {
-      if (!StageE.valid && StageE.inst.opcode) {
-        ; // 表示下一个阶段已被阻塞，但是其中有指令，所以不能把它置空
-      } else if ((StageE.inst.opcode == LOAD &&
-                  (StageD.inst.RS1 == StageE.inst.Rd ||
-                   StageD.inst.RS2 == StageE.inst.Rd))) {
-        stall_cnt++;
-        StageE.inst.opcode = 0;
-        StageE.valid = false;
-      } else {
-        print("Error1: ALU or FPU is busy but StageE.valid is false.\n");
-        exit(-1);
+      if (StageE.valid) {
+        StageE.inst.Flush = true;
       }
+      StageD.valid = false;
     }
     // IF是否传递给ID
     if (!(!StageD.valid ||
@@ -558,45 +551,46 @@ void pipeline_excute() {
           (StageF.inst.opcode == JMP && (StageF.inst.RS1 == StageD.inst.Rd ||
                                          StageF.inst.RS2 == StageD.inst.Rd)))) {
       StageD = StageF;
-      StageD.valid = true;
+      StageF.valid = true;
     } else {
-      if ((StageF.inst.opcode == BRANCH &&
-           (StageF.inst.RS1 == StageD.inst.Rd ||
-            StageF.inst.RS2 == StageD.inst.Rd)) ||
-          (StageF.inst.opcode == JMP && (StageF.inst.RS1 == StageD.inst.Rd ||
-                                         StageF.inst.RS2 == StageD.inst.Rd))) {
-        stall_cnt += 1;
-        StageD.inst.opcode = 0;
-      }
-      StageD.valid = false;
+      if (StageD.valid)
+        StageD.inst.Flush = true;
+      StageF.valid = false;
     }
     // IF是否从指令存储器取指
-    if (!(StageF.inst.opcode == JMP || StageF.inst.opcode == BRANCH)) {
+    if (!(!StageF.valid || StageD.inst.opcode == JMP ||
+          StageD.inst.opcode == BRANCH)) {
       StageF.inst = inst_list[ins_ptr];
       ins_ptr = ins_ptr + 1;
       StageF.valid = true;
     } else {
-      if (StageF.inst.opcode == JMP || StageF.inst.opcode == BRANCH) {
-        stall_cnt += 2;
-        StageF.inst.opcode = 0;
-      }
+      if (StageF.valid)
+        StageF.inst.Flush = true;
       StageF.valid = false;
     }
-    // if (DM_busy = 1)
-    //   DM_busy = 0;
-    pipeline_cycle_count++;
-    if (stall_cnt > 0)
-      stall_cnt--;
-    if (stall_cnt == 0) {
-      StageF.valid = true;
-      StageD.valid = true;
-      StageE.valid = true;
-      StageM.valid = true;
-      StageW.valid = true;
+
+    if (StageF.inst.Flush) {
+      StageF.inst.opcode = 0;
     }
+    if (StageD.inst.Flush) {
+      StageD.inst.opcode = 0;
+    }
+    if (StageE.inst.Flush) {
+      StageE.inst.opcode = 0;
+    }
+    if (StageM.inst.Flush) {
+      StageM.inst.opcode = 0;
+    }
+    if (StageW.inst.Flush) {
+      StageW.inst.opcode = 0;
+    }
+
+    pipeline_cycle_count++;
     if (StageE.inst.Hlt)
       break;
 
+    // if (DM_busy = 1)
+    //   DM_busy = 0;
     // if (StageE.inst.opcode == ALU) {
     //   ALU_busy++;
     // } else {
