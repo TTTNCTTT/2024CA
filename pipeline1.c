@@ -623,7 +623,7 @@ int main(int argc, char *argv[]) {
           printf("\n");
       }
     }
-    printf("\nInstruction count:%d\n", ins_count);
+    printf("Instruction count:%d\n", ins_count);
     read(resultfd[0], &pipeline_cycle_count, sizeof(pipeline_cycle_count));
     close(resultfd[0]);
     printf("Pipeline Cycle count:%d\n", pipeline_cycle_count);
