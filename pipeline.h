@@ -539,7 +539,7 @@ void pipeline_excute() {
       StageD.valid = true;
     } else {
       if (StageE.valid) {
-        StageE.inst.Flush = true;
+        StageE.inst.opcode = 0;
       }
       StageD.valid = false;
     }
@@ -554,7 +554,7 @@ void pipeline_excute() {
       StageF.valid = true;
     } else {
       if (StageD.valid)
-        StageD.inst.Flush = true;
+        StageD.inst.opcode = 0;
       StageF.valid = false;
     }
     // IF是否从指令存储器取指
@@ -565,25 +565,25 @@ void pipeline_excute() {
       StageF.valid = true;
     } else {
       if (StageF.valid)
-        StageF.inst.Flush = true;
+        StageF.inst.opcode = 0;
       StageF.valid = false;
     }
 
-    if (StageF.inst.Flush) {
-      StageF.inst.opcode = 0;
-    }
-    if (StageD.inst.Flush) {
-      StageD.inst.opcode = 0;
-    }
-    if (StageE.inst.Flush) {
-      StageE.inst.opcode = 0;
-    }
-    if (StageM.inst.Flush) {
-      StageM.inst.opcode = 0;
-    }
-    if (StageW.inst.Flush) {
-      StageW.inst.opcode = 0;
-    }
+    // if (StageF.inst.Flush) {
+    //   StageF.inst.opcode = 0;
+    // }
+    // if (StageD.inst.Flush) {
+    //   StageD.inst.opcode = 0;
+    // }
+    // if (StageE.inst.Flush) {
+    //   StageE.inst.opcode = 0;
+    // }
+    // if (StageM.inst.Flush) {
+    //   StageM.inst.opcode = 0;
+    // }
+    // if (StageW.inst.Flush) {
+    //   StageW.inst.opcode = 0;
+    // }
 
     pipeline_cycle_count++;
     if (StageE.inst.Hlt)
