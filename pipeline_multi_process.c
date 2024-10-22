@@ -1,5 +1,5 @@
 
-#include "pipeline1.h"
+#include "pipeline_multi_process.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -629,6 +629,8 @@ int main(int argc, char *argv[]) {
     printf("Pipeline Cycle count:%d\n", pipeline_cycle_count);
     printf("Pipeline CPI:%.4f\n",
            ((double)pipeline_cycle_count / (double)ins_count));
+    if (!if_print)
+      printf("提示：可以添加-p参数运行以打印过程信息\n");
   } else {
     perror("Failed to fork");
     exit(EXIT_FAILURE);
