@@ -51,4 +51,16 @@ void handle_excute_error(dword);
 // 全局变量
 extern struct INST INSTLIST[MAXINST];
 extern struct INST nop;
-// extern struct STAGE StageF, StageD, StageE, StageM, StageW;
+extern struct STAGE StageF, StageD, StageE, StageM, StageW;
+
+static char alu[] = "alu";
+static char branch[] = "brch";
+static char jmp[] = "jmp";
+static char load[] = "load";
+static char store[] = "stor";
+static char fpu[] = "fpu";
+static char nope[] = "NONE";
+static char error[] = "err";
+static char flush[] = "flus";
+static char no_fulsh[] = "----";
+static char hlt[] = "HLT";

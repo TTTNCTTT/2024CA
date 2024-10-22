@@ -10,6 +10,8 @@
 make all    #运行MIPS64汇编器、编译单周期与多周期CPU
 make cpu    #运行单周期CPU
 make cpu_m  #运行多周期CPU
+make cpu_p  #运行流水线CPU
+make cpu_p_m #运行多进程版流水线CPU
 ```
 
 ### 分步使用
@@ -19,6 +21,8 @@ make cpu_m  #运行多周期CPU
 ```shell
 python mips_assembler.py [-h] [-p] <input_file> <output_file>
 ```
+
+参数`-h`表示打印帮助信息，`-p`表示打印过程。
 
 -   `mips_cpu.c`文件——单周期 CPU：
 
@@ -33,3 +37,19 @@ gcc -o mips_cpu mips_cpu.c
 gcc -o mips_cpu_multicycle mips_cpu_multicycle.c
 ./mips_cpu_multicycle <instruction_file>
 ```
+
+-   `pipeline.c`文件——流水线 CPU：
+
+```shell
+gcc -o pipeline pipeline.c
+./pipeline <instruction_file>
+```
+
+-   `pipeline_multi_process.c`文件——流水线 CPU：
+
+```shell
+gcc -o pipeline_multi_process pipeline_multi_process.c
+./pipeline_multi_process [-p] <instruction_file>
+```
+
+参数`-p`表示打印过程。

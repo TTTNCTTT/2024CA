@@ -1,5 +1,5 @@
 
-#include "pipeline1.h"
+#include "pipeline_multi_process.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,26 +9,19 @@
 dword cur_instr_code;
 struct instr cur_instr;
 State current_state = IF;
-int cycle_count;
-int pipeline_cycle_count;
-int ins_count;
-int pipefd[2]; // 管道文件描述符
+int ins_count, cycle_count, pipeline_cycle_count;
+int pipefd[2];
+int resultfd[2];
+bool if_print = false;
+
 struct INST INSTLIST[MAXINST];
 struct INST nop = {0, 0, 0, 0, 0, false};
 struct STAGE StageF, StageD, StageE, StageM, StageW;
-char alu[] = "alu";
-char branch[] = "brch";
-char jmp[] = "jmp";
-char load[] = "load";
-char store[] = "stor";
-char fpu[] = "fpu";
-char nope[] = "NONE";
-char error[] = "err";
-char flush[] = "flus";
-char no_fulsh[] = "----";
 
 // 返回指令类型的函数，用于打印
 char *itype(struct INST ins) {
+  if (ins.Hlt)
+    return hlt;
   if (ins.Flush)
     return nope;
   switch (ins.opcode) {
@@ -464,10 +457,13 @@ halt:
   write_to_pipe(inst); // 发送结束信号
 }
 void print_usage(const char *program_name) {
-  printf("MIPS64 CPU Simulator\nUsage: %s <instruction_file>\n", program_name);
+  printf("MIPS64 CPU Simulator\nUsage: %s <instruction_file> "
+         "[-p]\n[Args]\t-p\tprint "
+         "process\n",
+         program_name);
 }
 
-void pipeline_execute() {
+int pipeline_execute() {
   struct INST inst;
   StageF.valid = true;
   StageF.inst.Hlt = false;
@@ -481,12 +477,12 @@ void pipeline_execute() {
   StageW.inst.Hlt = false;
   bool DM_busy = false; // unused
   bool IM_busy = false; // unused
+  bool end_flag = false;
   int ALU_busy = 0;
   int FPU_busy = 0;
-  while (!(inst = read_from_pipe()).Hlt) {
-    printf("cycle %05d\t|F:%s\t|D:%s\t|E:%s\t|M:%s\t|W:%s\t|\n",
-           pipeline_cycle_count, itype(StageF.inst), itype(StageD.inst),
-           itype(StageE.inst), itype(StageM.inst), itype(StageW.inst));
+  while (1) {
+    if (StageE.inst.Hlt)
+      break;
     StageW.valid = true;
 
     // whether to start WB
@@ -539,7 +535,12 @@ void pipeline_execute() {
           (!StageD.inst.Flush && StageD.inst.opcode == BRANCH) ||
           (!StageE.inst.Flush && StageD.inst.opcode == JMP) ||
           (!StageE.inst.Flush && StageD.inst.opcode == BRANCH))) {
-      StageF.inst = inst;
+      if (!end_flag)
+        StageF.inst = read_from_pipe();
+      else
+        StageF.inst = nop;
+      if (StageF.inst.Hlt)
+        end_flag = true;
       StageF.inst.Flush = false;
       StageF.valid = true;
     } else {
@@ -547,15 +548,27 @@ void pipeline_execute() {
         StageF.inst.Flush = true;
       StageF.valid = false;
     }
-
+    if (if_print) {
+      printf("cycle %05d\t|F:%s\t|D:%s\t|E:%s\t|M:%s\t|W:%s\t|\n",
+             pipeline_cycle_count, itype(StageF.inst), itype(StageD.inst),
+             itype(StageE.inst), itype(StageM.inst), itype(StageW.inst));
+    }
     pipeline_cycle_count++;
-    if (StageE.inst.Hlt)
-      break;
   }
+  return pipeline_cycle_count;
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
+  const char *instruction_file = NULL;
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-p") == 0) {
+      if_print = 1;
+    } else {
+      instruction_file = argv[i];
+    }
+  }
+
+  if (instruction_file == NULL) {
     print_usage(argv[0]);
     return 1;
   }
@@ -565,46 +578,59 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
+  if (pipe(resultfd) == -1) {
+    perror("Pipe failed");
+    exit(EXIT_FAILURE);
+  }
+
   pid_t pid = fork(); // 创建子进程
   if (pid == 0) {     // 子进程
     close(pipefd[1]); // 子进程只读
-    pipeline_execute();
+    close(resultfd[0]);
+    pipeline_cycle_count = pipeline_execute();
+    write(resultfd[1], &pipeline_cycle_count, sizeof(pipeline_cycle_count));
+    close(resultfd[1]);
     exit(EXIT_SUCCESS);
   } else if (pid > 0) { // 父进程
     close(pipefd[0]);   // 父进程只写
-    const char *instruction_file = argv[1];
-
-    printf("存入的待计算数据\n");
-    for (int i = 0; i < 64; i++) {
-      store_float(i * 4, 0.1 * (i + 1) + 4);
-      printf("f[%d]:%.2f\t", i, load_float(i * 4));
-      if (!((i + 1) % 4))
-        printf("\n");
+    close(resultfd[1]);
+    if (if_print) {
+      printf("存入的待计算数据\n");
+      for (int i = 0; i < 64; i++) {
+        store_float(i * 4, 0.1 * (i + 1) + 4);
+        printf("f[%d]:%.2f\t", i, load_float(i * 4));
+        if (!((i + 1) % 4))
+          printf("\n");
+      }
     }
-    printf("\n使用c直接计算出的标准答案\n");
+
     load_instructions(instruction_file);
     execute_instructions();
 
     int status;
     waitpid(pid, &status, 0); // 等待子进程结束
-
-    for (int i = 0; i < 64; i++) {
-      printf("f[%d]:%.2f\t", i, (0.1 * (i + 1) + 4) * 0.9 + 0.5);
-      if (!((i + 1) % 4))
-        printf("\n");
+    if (if_print) {
+      printf("\n使用c直接计算出的标准答案\n");
+      for (int i = 0; i < 64; i++) {
+        printf("f[%d]:%.2f\t", i, (0.1 * (i + 1) + 4) * 0.9 + 0.5);
+        if (!((i + 1) % 4))
+          printf("\n");
+      }
+      printf("\n读取的结果数据\n");
+      for (int i = 0; i < 64; i++) {
+        printf("f[%d]:%.2f\t", i, load_float(i * 4));
+        if (!((i + 1) % 4))
+          printf("\n");
+      }
     }
-    printf("\n读取的结果数据\n");
-    for (int i = 0; i < 64; i++) {
-      printf("f[%d]:%.2f\t", i, load_float(i * 4));
-      if (!((i + 1) % 4))
-        printf("\n");
-    }
-    printf("\nInstruction count:%d\n", ins_count);
-    printf("Cycle count:%d\n", cycle_count);
-    printf("CPI:%.4f\n", ((double)cycle_count / (double)ins_count));
+    printf("Instruction count:%d\n", ins_count);
+    read(resultfd[0], &pipeline_cycle_count, sizeof(pipeline_cycle_count));
+    close(resultfd[0]);
     printf("Pipeline Cycle count:%d\n", pipeline_cycle_count);
     printf("Pipeline CPI:%.4f\n",
            ((double)pipeline_cycle_count / (double)ins_count));
+    if (!if_print)
+      printf("提示：可以添加-p参数运行以打印过程信息\n");
   } else {
     perror("Failed to fork");
     exit(EXIT_FAILURE);
