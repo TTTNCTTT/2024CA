@@ -29,6 +29,7 @@ struct instr {
   int offset;          // 偏移量
   unsigned int nextpc; // 下一条指令的PC地址
   qword base_v, rs_v, rt_v, rd_v, fs_v, ft_v, fd_v; // 操作数的值
+  int latency;
 };
 
 struct INST {
@@ -37,6 +38,7 @@ struct INST {
   int Imm;
   bool Flush;
   bool Hlt;
+  int Latency;
 };
 
 struct STAGE {

@@ -1,5 +1,6 @@
 
 #include "pipeline_multi_process.h"
+#include "data_cache.c"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -271,9 +272,11 @@ struct instr memory(struct instr ins) {
   if (strcmp(ins.name, "loadf") == 0) {
     float temp_loadf_ft = load_float(ins.rt_v);
     ins.ft_v = *(qword *)&temp_loadf_ft;
+    ins.latency = accessDCache(49, ins.rt_v, cycle_count);
   } else if (strcmp(ins.name, "storef") == 0) {
     float temp_storef_ft = *(float *)&ins.ft_v;
     store_float(ins.rt_v, temp_storef_ft);
+    ins.latency = accessDCache(57, ins.rt_v, cycle_count);
   }
   return ins;
 }
@@ -441,6 +444,7 @@ void execute_instructions() {
       break;
     case MEM:
       cur_instr = memory(cur_instr);
+      cycle_count += cur_instr.latency;
       current_state = WB;
       break;
     case WB:
@@ -630,7 +634,9 @@ int main(int argc, char *argv[]) {
     printf("Pipeline CPI:%.4f\n",
            ((double)pipeline_cycle_count / (double)ins_count));
     if (!if_print)
-      printf("提示：可以添加-p参数运行以打印过程信息\n");
+      printf("提示：可以添加-p参数运行以打印过程信息: ./pipeline_multi_process "
+             "<file> "
+             "-p\n");
   } else {
     perror("Failed to fork");
     exit(EXIT_FAILURE);
