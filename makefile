@@ -5,7 +5,7 @@ PYTHON_SCRIPT = mips_assembler.py
 ASM_INPUT = mips_asm_input.txt
 BIN_OUTPUT = bin
 CC = gcc
-CFLAGS = -o
+CFLAGS = -g -O0 -o
 
 
 all: $(BIN_OUTPUT) mips_cpu mips_cpu pipeline pipeline_multi_process
@@ -34,8 +34,8 @@ cpu_m: mips_cpu_multicycle $(BIN_OUTPUT)
 cpu_p: pipeline $(BIN_OUTPUT)
 	./pipeline $(BIN_OUTPUT)
 
-cpu_p_m: pipeline_multi_process $(BIN_OUTPUT)
-	./pipeline_multi_process $(BIN_OUTPUT)
+cpu_p_m: clean pipeline_multi_process $(BIN_OUTPUT)
+	./pipeline_multi_process $(BIN_OUTPUT) -p > log.txt
 
 clean:
 	rm -f mips_cpu mips_cpu_multicycle pipeline pipeline_multi_process $(BIN_OUTPUT)

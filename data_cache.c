@@ -8,10 +8,10 @@
 #define DC_INVALID 0
 #define DC_VALID 1
 #define DC_DIRTY 2
-#define MEM_RD_LATENCY 25
+#define MEM_RD_LATENCY 75
 #define MEM_WR_LATENCY 50
-#define WR_BUFF_WR_LATENCY 5
-#define WR_BUFF_FLUSH_LATENCY 50
+#define WR_BUFF_WR_LATENCY 10
+#define WR_BUFF_FLUSH_LATENCY 20
 
 extern int pipeline_cycle_count;
 int lruTime = 0;
@@ -70,7 +70,7 @@ int wrBack(uqword tag, int time) {
       dcWrBuff[0].trdy = time + latency;
     }
   }
-
+  // printf("time=%d, Opcode=WR, Latency=%d, hit=%d\n", time, latency, found);
   return latency;
 }
 
@@ -98,7 +98,7 @@ int accessDCache(int opcode, int addr, int time) {
         lruSlot = i;
       }
   }
-  int trdy;
+  int local_trdy = 0;
   if (hit) {
     struct cacheBlk *dcBlock = &(dCache[index][slot]);
     dcBlock->trdy = pipeline_cycle_count;
@@ -116,29 +116,39 @@ int accessDCache(int opcode, int addr, int time) {
     if (opcode == 41 || opcode == 49) // lw(41) and loadf(49) 读不命中
     {
       struct cacheBlk *dcBlock = &(dCache[index][lruSlot]);
-      trdy = MEM_RD_LATENCY;
+      local_trdy = MEM_RD_LATENCY;
       if (dcBlock->status == DC_DIRTY) // 如果被换出的块为脏块
-        // trdy += wrBack(tag, time);
-        trdy += WR_BUFF_FLUSH_LATENCY;
+        local_trdy += wrBack(tag, time);
+      // local_trdy += WR_BUFF_FLUSH_LATENCY;
       dcBlock->tag = tag;
-      dcBlock->trdy = time + trdy;
+      dcBlock->trdy = time + local_trdy;
       dcBlock->status = DC_VALID;
     } else if (opcode == 57) // storef(57) // 写不命中
     {
       struct cacheBlk *dcBlock = &(dCache[index][lruSlot]);
-      trdy = 0;
+      local_trdy = 0;
       if (dcBlock->status == DC_DIRTY) /* Must remote write-back old data */
-        trdy = wrBack(tag, time);
+        local_trdy = wrBack(tag, time);
       else
         dcBlock->status = DC_DIRTY;
       /* Read in cache line we wish to update */
-      trdy += MEM_RD_LATENCY;
+      local_trdy += MEM_RD_LATENCY;
       dcBlock->tag = tag;
-      dcBlock->trdy = time + trdy;
+      dcBlock->trdy = time + local_trdy;
     } else {
       printf("Error: unknown cache-access op opcode: %d :miss\n", opcode);
       exit(-1);
     }
   }
-  return trdy;
+  char loadf_str[] = "loadf";
+  char storef_str[] = "storef";
+  char *opcode_str;
+  if (opcode == 49)
+    opcode_str = loadf_str;
+  else if (opcode == 57)
+    opcode_str = storef_str;
+  // printf("time=%d\tOp=%s\tLatency=%d\thit=%d\n", time, opcode_str,
+  // local_trdy,
+  //  hit);
+  return local_trdy;
 }
