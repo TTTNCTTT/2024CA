@@ -1,5 +1,6 @@
 
 #include "pipeline_multi_process.h"
+#include "data_cache.c"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -205,6 +206,7 @@ struct instr decode(dword code) {
   default:
     handle_decode_error(ins.code);
   }
+  ins.latency = 0;
   return ins;
 }
 
@@ -271,9 +273,11 @@ struct instr memory(struct instr ins) {
   if (strcmp(ins.name, "loadf") == 0) {
     float temp_loadf_ft = load_float(ins.rt_v);
     ins.ft_v = *(qword *)&temp_loadf_ft;
+    ins.latency = accessDCache(49, ins.rt_v, cycle_count);
   } else if (strcmp(ins.name, "storef") == 0) {
     float temp_storef_ft = *(float *)&ins.ft_v;
     store_float(ins.rt_v, temp_storef_ft);
+    ins.latency = accessDCache(57, ins.rt_v, cycle_count);
   }
   return ins;
 }
@@ -414,13 +418,14 @@ struct INST instr_to_INST(struct instr input) {
   output.Rd = (char)input.rd;
   output.Imm = (int)input.imm;
   output.Hlt = (input.code == 0x0);
-
+  output.Latency = input.latency;
   return output;
 }
 
 // 执行指令的主循环
 void execute_instructions() {
   unsigned int pc = 0;
+  cycle_count = 0;
   while (pc < MAXINST) {
     cycle_count++;
     switch (current_state) {
@@ -441,6 +446,8 @@ void execute_instructions() {
       break;
     case MEM:
       cur_instr = memory(cur_instr);
+      cycle_count += cur_instr.latency;
+      // printf("at time %d, latency=%d\n", cycle_count, cur_instr.latency);
       current_state = WB;
       break;
     case WB:
@@ -456,6 +463,7 @@ halt:
   struct INST inst = instr_to_INST(cur_instr);
   write_to_pipe(inst); // 发送结束信号
 }
+
 void print_usage(const char *program_name) {
   printf("MIPS64 CPU Simulator\nUsage: %s <instruction_file> "
          "[-p]\n[Args]\t-p\tprint "
@@ -475,7 +483,7 @@ int pipeline_execute() {
   StageM.inst.Hlt = false;
   StageW.valid = true;
   StageW.inst.Hlt = false;
-  bool DM_busy = false; // unused
+  int DM_busy = 0;
   bool IM_busy = false; // unused
   bool end_flag = false;
   int ALU_busy = 0;
@@ -483,8 +491,10 @@ int pipeline_execute() {
   while (1) {
     if (StageE.inst.Hlt)
       break;
-    StageW.valid = true;
+    StageW.inst = nop;
 
+    StageW.valid = DM_busy == 0;
+    // StageW.valid = true;
     // whether to start WB
     if (!(!StageW.valid)) {
       StageW = StageM;
@@ -495,6 +505,7 @@ int pipeline_execute() {
     // whether to start MEM
     if (!(!StageM.valid || DM_busy)) {
       StageM = StageE;
+      DM_busy = StageM.inst.Latency;
       // StageM.inst.Flush = false;
       StageE.valid = true;
     } else {
@@ -504,7 +515,7 @@ int pipeline_execute() {
     // whether to start EX
     if (!(!StageE.valid || ALU_busy >= ALU_cnt || FPU_busy >= FPU_cnt ||
           ((StageE.inst.opcode == LOAD &&
-            !StageE.inst.Flush) && // Flush指这条指令实际上被认为是/不是空指令
+            !StageE.inst.Flush) && // Flush，指这条指令实际上被认为是/不是空指令
            (StageD.inst.RS1 == StageE.inst.Rd ||
             StageD.inst.RS2 == StageE.inst.Rd)))) {
       StageE = StageD;
@@ -512,6 +523,7 @@ int pipeline_execute() {
     } else {
       if (StageE.valid) {
         StageE.inst.Flush = true;
+        StageE.inst.Latency = 0;
       }
       StageD.valid = false;
     }
@@ -528,6 +540,7 @@ int pipeline_execute() {
     } else {
       if (StageD.valid)
         StageD.inst.Flush = true;
+      StageE.inst.Latency = 0;
       StageF.valid = false;
     }
     // whether to fetch an instruction
@@ -546,13 +559,24 @@ int pipeline_execute() {
     } else {
       if (StageF.valid)
         StageF.inst.Flush = true;
+      StageE.inst.Latency = 0;
       StageF.valid = false;
     }
     if (if_print) {
-      printf("cycle %05d\t|F:%s\t|D:%s\t|E:%s\t|M:%s\t|W:%s\t|\n",
+      // printf(
+      //     "cycle %05d \t|F:%s %d\t|D:%s %d\t|E:%s %d\t|M:%s %d\t|W:%s
+      //     %d\t|\n", pipeline_cycle_count, itype(StageF.inst),
+      //     StageF.inst.Latency, itype(StageD.inst), StageD.inst.Latency,
+      //     itype(StageE.inst), StageE.inst.Latency, itype(StageM.inst),
+      //     StageM.inst.Latency, itype(StageW.inst), StageW.inst.Latency);
+      printf("cycle %05d \t|F:%s\t|D:%s\t|E:%s\t|M:%s\t|W:%s\t|\n",
              pipeline_cycle_count, itype(StageF.inst), itype(StageD.inst),
              itype(StageE.inst), itype(StageM.inst), itype(StageW.inst));
     }
+    if (DM_busy > 0) {
+      DM_busy--;
+    }
+    // printf("DM_busy=%d\n", DM_busy);
     pipeline_cycle_count++;
   }
   return pipeline_cycle_count;
@@ -630,7 +654,10 @@ int main(int argc, char *argv[]) {
     printf("Pipeline CPI:%.4f\n",
            ((double)pipeline_cycle_count / (double)ins_count));
     if (!if_print)
-      printf("提示：可以添加-p参数运行以打印过程信息\n");
+      printf("提示：可以添加-p参数运行以打印过程信息，推荐打印到文本文件中查看:"
+             " ./pipeline_multi_process "
+             "<file> "
+             "-p > log.txt\n");
   } else {
     perror("Failed to fork");
     exit(EXIT_FAILURE);
