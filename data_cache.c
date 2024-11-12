@@ -3,17 +3,17 @@
 #endif
 #include <math.h> // log2()
 #include <stdbool.h>
-#define DC_NUM_SETS 4
-#define DC_SET_SIZE 2
-#define DC_BLOCK_SIZE 32
-#define DC_WR_BUFF_SIZE 4
+#define DC_NUM_SETS 4     // 4组
+#define DC_SET_SIZE 2     // 2路组相联
+#define DC_BLOCK_SIZE 16  // 块大小=4*sizeof(float)
+#define DC_WR_BUFF_SIZE 4 // 写缓冲槽位数
 #define DC_INVALID 0
 #define DC_VALID 1
 #define DC_DIRTY 2
-#define MEM_RD_LATENCY 75
-#define MEM_WR_LATENCY 50
-#define WR_BUFF_WR_LATENCY 10
-#define WR_BUFF_FLUSH_LATENCY 20
+#define MEM_RD_LATENCY 75        // 读主存
+#define MEM_WR_LATENCY 50        // 写主存
+#define WR_BUFF_WR_LATENCY 1     // 写入写缓冲
+#define WR_BUFF_FLUSH_LATENCY 20 // 写缓冲中的数据写到主存
 
 extern int pipeline_cycle_count;
 int lruTime;
