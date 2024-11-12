@@ -1,7 +1,9 @@
-// #include "./regfile.c"
+#ifndef MEMSIZE
+#include "./regfile.c"
+#endif
 #include <math.h> // log2()
 #include <stdbool.h>
-#define DC_NUM_SETS 8
+#define DC_NUM_SETS 4
 #define DC_SET_SIZE 2
 #define DC_BLOCK_SIZE 32
 #define DC_WR_BUFF_SIZE 4
@@ -14,8 +16,8 @@
 #define WR_BUFF_FLUSH_LATENCY 20
 
 extern int pipeline_cycle_count;
-int lruTime = 0;
-
+int lruTime;
+int rd_cnt, wr_cnt, rd_hit, wr_hit;
 struct cacheBlk {
   int tag;
   int status;
@@ -86,6 +88,7 @@ int accessDCache(int opcode, int addr, int time) {
   lruTime = time;
 
   bool hit = false;
+  // 判断是否命中，同时查找用于替换的LRU行
   for (int i = 0; i < DC_SET_SIZE; i++) {
     if ((dCache[index][i].tag == tag) &&
         (dCache[index][i].status != DC_INVALID)) {
@@ -98,15 +101,20 @@ int accessDCache(int opcode, int addr, int time) {
         lruSlot = i;
       }
   }
+  // 处理命中与否的逻辑
   int local_trdy = 0;
   if (hit) {
     struct cacheBlk *dcBlock = &(dCache[index][slot]);
     dcBlock->trdy = pipeline_cycle_count;
-    if (opcode == 41 || opcode == 49) // lw(41) and loadf(49)
+    if (opcode == 41 ||
+        opcode == 49) // lw(41) and loadf(49) 读命中 视为没有开销
     {
-      ;
-    } else if (opcode == 57) // storef(57)
+      rd_cnt++;
+      rd_hit++;
+    } else if (opcode == 57) // storef(57) 写命中 视为没有开销
     {
+      wr_cnt++;
+      wr_hit++;
       dcBlock->status = DC_DIRTY;
     } else {
       printf("Error: unknown cache-access op opcode: %d :hit\n", opcode);
@@ -115,24 +123,26 @@ int accessDCache(int opcode, int addr, int time) {
   } else {
     if (opcode == 41 || opcode == 49) // lw(41) and loadf(49) 读不命中
     {
+      rd_cnt++;
       struct cacheBlk *dcBlock = &(dCache[index][lruSlot]);
       local_trdy = MEM_RD_LATENCY;
-      if (dcBlock->status == DC_DIRTY) // 如果被换出的块为脏块
-        local_trdy += wrBack(tag, time);
+      if (dcBlock->status == DC_DIRTY)   // 如果被换出的块为脏块
+        local_trdy += wrBack(tag, time); // 计算换出、写回的开销
       // local_trdy += WR_BUFF_FLUSH_LATENCY;
       dcBlock->tag = tag;
       dcBlock->trdy = time + local_trdy;
       dcBlock->status = DC_VALID;
-    } else if (opcode == 57) // storef(57) // 写不命中
+    } else if (opcode == 57) // storef(57) 写不命中
     {
+      wr_cnt++;
       struct cacheBlk *dcBlock = &(dCache[index][lruSlot]);
       local_trdy = 0;
-      if (dcBlock->status == DC_DIRTY) /* Must remote write-back old data */
-        local_trdy = wrBack(tag, time);
+      if (dcBlock->status == DC_DIRTY)  /* Must remote write-back old data */
+        local_trdy = wrBack(tag, time); // 需要计算写回开销
       else
-        dcBlock->status = DC_DIRTY;
+        dcBlock->status = DC_DIRTY; // 直接将此块覆盖，并打上DIRTY标签
       /* Read in cache line we wish to update */
-      local_trdy += MEM_RD_LATENCY;
+      local_trdy += MEM_RD_LATENCY; // 从内存中读出此块
       dcBlock->tag = tag;
       dcBlock->trdy = time + local_trdy;
     } else {
